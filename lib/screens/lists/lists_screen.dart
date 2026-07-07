@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/db/database.dart';
 import '../../core/db/repositories/list_repository.dart';
 import '../../core/theme/app_colors.dart';
@@ -33,6 +34,42 @@ class _ListsScreenState extends State<ListsScreen> {
     final db = await DatabaseHelper.instance.database;
     final lists = await ListRepository(db).getLists();
     if (mounted) setState(() { _lists = lists; _loading = false; });
+  }
+
+  void _deleteWithUndo(TaskList list) {
+    final idx = _lists.indexOf(list);
+    setState(() => _lists.remove(list));
+    HapticFeedback.mediumImpact();
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('"${list.name}" deleted'),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: Theme.of(context).colorScheme.primary,
+          onPressed: () {
+            setState(() {
+              if (idx >= 0 && idx <= _lists.length) {
+                _lists.insert(idx, list);
+              } else {
+                _lists.add(list);
+              }
+            });
+          },
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    ).closed.then((reason) {
+      if (reason != SnackBarClosedReason.action) {
+        _doDelete(list);
+      }
+    });
+  }
+
+  Future<void> _doDelete(TaskList list) async {
+    final db = await DatabaseHelper.instance.database;
+    await ListRepository(db).deleteList(list.id!);
   }
 
   IconData _icon(String category) {
@@ -143,6 +180,7 @@ class _ListsScreenState extends State<ListsScreen> {
               );
               _load();
             },
+            onLongPress: () => _deleteWithUndo(list),
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,

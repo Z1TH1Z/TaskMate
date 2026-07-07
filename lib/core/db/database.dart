@@ -15,7 +15,12 @@ class DatabaseHelper {
   Future<Database> _initDb() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'taskmate.db');
-    return openDatabase(path, version: 1, onCreate: _onCreate);
+    return openDatabase(
+      path,
+      version: 1,
+      onCreate: _onCreate,
+      onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
+    );
   }
 
   Future<void> _onCreate(Database db, int version) async {

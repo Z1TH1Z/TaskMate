@@ -103,6 +103,33 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
     await ListRepository(db).deleteItem(item.id!);
   }
 
+  Future<void> _deleteList() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete list?', style: TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+        content: Text('This will delete "${widget.list.name}" and all its items.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: AppColors.alarm)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      final db = await DatabaseHelper.instance.database;
+      await ListRepository(db).deleteList(widget.list.id!);
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -141,6 +168,10 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
                   fontWeight: FontWeight.w500,
                   letterSpacing: -0.3,
                 )),
+          ),
+          GestureDetector(
+            onTap: _deleteList,
+            child: const Icon(Icons.delete_outline, color: AppColors.textSecondary, size: 16),
           ),
         ],
       ),

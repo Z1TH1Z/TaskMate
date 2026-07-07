@@ -80,6 +80,7 @@ class ListRepository {
   }
 
   Future<void> deleteList(int listId) async {
+    await _db.delete('list_items', where: 'list_id = ?', whereArgs: [listId]);
     await _db.delete('lists', where: 'id = ?', whereArgs: [listId]);
   }
 }
