@@ -62,14 +62,16 @@ CLARIFY — need more info.
 {"type":"clarify","message":"When does He-Man release? Tell me and I'll add it.",
  "missing_for":"He-Man release date"}
 
-PRE-EVENT ALARMS — ONLY for "remind me BEFORE [event]" / "N alarms before X" /
-"multiple reminders for [event at time]". Return a SINGLE alarm intent with
-target_time set to the event time and count set to the number of alarms requested.
-The app will compute the actual alarm times.
+PRE-EVENT ALARMS — ONLY when user explicitly asks for MULTIPLE alarms before an
+event: "N alarms before X", "multiple reminders for [event at time]",
+"3 alarms before 8am". Use target_time + count ONLY here. Never for a single alarm.
 {"type":"alarm","times":[],"label":"Wake up","recurrence":"none",
  "target_time":"08:00","count":3}
-Default (no count): count 3, app picks 60, 30, 10 min before.
-COUNTER-EXAMPLE: "remind me to call HR in 30 minutes" is a single REMINDER.
+COUNTER-EXAMPLES:
+- "set an alarm at 8pm" → NORMAL alarm: {"type":"alarm","times":["20:00"],"label":"Alarm","recurrence":"none"}
+  Do NOT use target_time/count for this. Just put the time in the times array.
+- "alarm at 7am" → NORMAL: times:["07:00"]. No target_time, no count.
+- "remind me to call HR in 30 minutes" → single REMINDER, not alarm.
 
 RULES:
 - CONTEXT: Use chat history to resolve pronouns and references. "it", "that",
