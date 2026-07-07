@@ -39,6 +39,7 @@ class _ListsScreenState extends State<ListsScreen> {
     switch (category) {
       case 'movies': return Icons.movie_outlined;
       case 'anime':  return Icons.tv_outlined;
+      case 'shows':  return Icons.live_tv_outlined;
       case 'books':  return Icons.menu_book_outlined;
       default:       return Icons.list_outlined;
     }
@@ -48,6 +49,7 @@ class _ListsScreenState extends State<ListsScreen> {
     switch (category) {
       case 'movies': return AppColors.alarm;
       case 'anime':  return AppColors.reminder;
+      case 'shows':  return AppColors.reminder;
       case 'books':  return AppColors.recurring;
       default:       return AppColors.todo;
     }

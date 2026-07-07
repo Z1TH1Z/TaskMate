@@ -146,6 +146,14 @@ class IntentRouter {
   Future<String> _handleList(ListIntent intent) async {
     TaskList? existingList = await _listRepo.getListByName(intent.listName);
 
+    // Fallback: match by category if exact name not found
+    if (existingList == null && intent.category != 'general') {
+      final byCategory = await _listRepo.searchLists(intent.category);
+      if (byCategory.isNotEmpty) {
+        existingList = byCategory.first;
+      }
+    }
+
     if (existingList == null) {
       if (intent.action == 'remove') {
         return "Couldn't find a list called '${intent.listName}'.";

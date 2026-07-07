@@ -27,11 +27,18 @@ RECURRING — repeating notification.
 recurrence: "daily"|"weekdays"|"weekly". "except weekends"/"Mon-Fri" → "weekdays".
 No end → null. "3 times a day" (no times) → ["08:00","13:00","19:00"].
 
-LIST — watchlist / reading list.
+LIST — watchlist / reading list / shows list.
 {"type":"list","action":"create","list_name":"Movies","category":"movies",
  "items":[{"title":"Backrooms","notes":null}]}
-action: "create"|"add"|"remove". category: "movies"|"anime"|"books"|"general".
+action: "create"|"add"|"remove". category: "movies"|"anime"|"books"|"shows"|"general".
 "remove Backrooms from movies" → action "remove". notes: release dates / extra info.
+CATEGORY GUIDE: TV shows / series / web series → "shows". Films / movies → "movies".
+"I want to watch [show name]" → add to Shows list (category "shows"), NOT a new "Watchlist".
+"I want to watch [movie name]" → add to Movies list (category "movies").
+PREFER EXISTING LISTS: Always use action "add" (not "create") when the user is just
+adding items. The app auto-creates the list if needed. Use the CATEGORY as list_name
+(e.g. list_name:"Shows", list_name:"Movies", list_name:"Books"), not generic names
+like "Watchlist", "Watch List", or "My List".
 
 TODO — simple one-off task.
 {"type":"todo","title":"Submit report","due_date":"2026-06-20","priority":"high"}
