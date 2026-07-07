@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#0A0A0A"
+    android:padding="32dp">
+
+    <TextView
+        android:id="@+id/alarm_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="--:--"
+        android:textColor="#EDEDED"
+        android:textSize="64sp"
+        android:textStyle="bold"
+        android:letterSpacing="-0.02" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ALARM"
+        android:textColor="#10B981"
+        android:textSize="13sp"
+        android:letterSpacing="0.3"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:id="@+id/alarm_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Alarm"
+        android:gravity="center"
+        android:textColor="#EDEDED"
+        android:textSize="22sp"
+        android:layout_marginTop="28dp" />
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <Button
+        android:id="@+id/btn_dismiss"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Dismiss"
+        android:textAllCaps="false"
+        android:textColor="#04130D"
+        android:textSize="17sp"
+        android:backgroundTint="#10B981"
+        android:layout_marginTop="12dp" />
+
+    <Button
+        android:id="@+id/btn_snooze"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Snooze 10 min"
+        android:textAllCaps="false"
+        android:textColor="#EDEDED"
+        android:textSize="16sp"
+        android:backgroundTint="#1E1E1E"
+        android:layout_marginTop="12dp" />
+
+</LinearLayout>
