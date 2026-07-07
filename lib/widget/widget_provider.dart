@@ -87,7 +87,7 @@ class WidgetProvider {
       final todayTasks = await TaskRepository(db).getTasksDueToday();
       final nextLabel = await _nextEventLabel(db);
 
-      final accentHex = '#${ThemeProvider.instance.accent.value.toRadixString(16).substring(2).toUpperCase()}';
+      final accentHex = '#${ThemeProvider.instance.accent.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
       await HomeWidget.saveWidgetData('accent_color', accentHex);
       await HomeWidget.saveWidgetData('tasks_today', todayTasks.length);
       await HomeWidget.saveWidgetData('next_alarm', nextLabel);
