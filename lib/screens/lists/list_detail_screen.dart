@@ -131,13 +131,17 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
             child: const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 16),
           ),
           const SizedBox(width: 12),
-          Text(widget.list.name,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -0.3,
-              )),
+          Expanded(
+            child: Text(widget.list.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -0.3,
+                )),
+          ),
         ],
       ),
     );
@@ -215,9 +219,17 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
                   )),
             ),
             if (item.notes != null)
-              Text(item.notes!,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 10)),
+              Flexible(
+                flex: 0,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(item.notes!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 10)),
+                ),
+              ),
           ],
         ),
       ),

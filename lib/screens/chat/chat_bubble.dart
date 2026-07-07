@@ -42,6 +42,8 @@ class _ChatBubbleState extends State<ChatBubble>
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
+    final screenW = MediaQuery.of(context).size.width;
+    final offset = (screenW * 0.15).clamp(32.0, 80.0);
     return FadeTransition(
       opacity: _fadeAnim,
       child: SlideTransition(
@@ -51,8 +53,8 @@ class _ChatBubbleState extends State<ChatBubble>
           child: Container(
             margin: EdgeInsets.only(
               top: 3, bottom: 3,
-              left: widget.isUser ? 48 : 14,
-              right: widget.isUser ? 14 : 48,
+              left: widget.isUser ? offset : 14,
+              right: widget.isUser ? 14 : offset,
             ),
             decoration: widget.isUser
                 ? BoxDecoration(

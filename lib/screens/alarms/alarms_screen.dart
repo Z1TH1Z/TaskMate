@@ -227,12 +227,14 @@ class _AlarmsScreenState extends State<AlarmsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Text(DateHelper.formatTime(a.alarmTime),
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          )),
+                      Flexible(
+                        child: Text(DateHelper.formatTime(a.alarmTime),
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            )),
+                      ),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -252,6 +254,8 @@ class _AlarmsScreenState extends State<AlarmsScreen> {
                           color: AppColors.textPrimary, fontSize: 13)),
                   const SizedBox(height: 2),
                   Text('Rings ${_whenLabel(next)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: accent, fontSize: 11)),
                 ],

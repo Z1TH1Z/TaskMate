@@ -118,10 +118,13 @@ class _ListsScreenState extends State<ListsScreen> {
       onRefresh: _load,
       color: Theme.of(context).colorScheme.primary,
       backgroundColor: AppColors.surface,
-      child: GridView.builder(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cols = (constraints.maxWidth / 180).floor().clamp(2, 4);
+          return GridView.builder(
         padding: const EdgeInsets.all(14),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: cols,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
           childAspectRatio: 1.1,
@@ -164,6 +167,8 @@ class _ListsScreenState extends State<ListsScreen> {
               ),
             ),
           );
+        },
+      );
         },
       ),
     );

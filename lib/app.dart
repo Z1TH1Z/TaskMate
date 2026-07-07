@@ -192,13 +192,16 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                       Icon(_tabs[i].$1, size: 20,
                           color: active ? accent : AppColors.textSecondary),
                       const SizedBox(height: 4),
-                      Text(_tabs[i].$2,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.5,
-                            color: active ? accent : AppColors.textSecondary,
-                          )),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(_tabs[i].$2,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.5,
+                              color: active ? accent : AppColors.textSecondary,
+                            )),
+                      ),
                     ],
                   ),
                 ),
