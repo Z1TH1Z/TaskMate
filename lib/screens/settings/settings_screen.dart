@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../core/backup/backup_service.dart';
 import '../../core/scheduler/ringtone_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/theme_provider.dart';
@@ -47,6 +50,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _soundTitle = null);
   }
 
+  Future<void> _backup() async {
+    try {
+      final path = await BackupService.writeBackupFile();
+      await Share.shareXFiles(
+        [XFile(path)],
+        subject: 'TaskMate backup',
+        text: 'TaskMate data backup',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Backup failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _restore() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.any);
+    final path = result?.files.single.path;
+    if (path == null) return; // cancelled
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Restore backup?',
+            style: TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+        content: const Text(
+            'This replaces ALL current tasks, lists and alarms with the '
+            'contents of the backup. This cannot be undone.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restore', style: TextStyle(color: AppColors.alarm)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final summary = await BackupService.restoreFromPath(path);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(summary)),
+        );
+      }
+    } catch (e) {
+      final msg = e is FormatException ? e.message : '$e';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore failed: $msg')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
@@ -90,6 +157,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'Alarms ring once with vibration. Pick any sound on your '
                     'device — ringtones, notification tones, or music you\'ve '
                     'added.',
+                    style: TextStyle(
+                        color: AppColors.textSecondary, fontSize: 11, height: 1.5),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _sectionLabel('DATA'),
+                _tile(
+                  icon: Icons.backup_outlined,
+                  title: 'Back up data',
+                  subtitle: 'Export tasks, lists & alarms to a file',
+                  onTap: _backup,
+                  accent: accent,
+                ),
+                _tile(
+                  icon: Icons.settings_backup_restore,
+                  title: 'Restore data',
+                  subtitle: 'Replace current data from a backup file',
+                  onTap: _restore,
+                  accent: accent,
+                ),
+                const SizedBox(height: 24),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 18),
+                  child: Text(
+                    'Backups are JSON files you can save to Drive, Files, or '
+                    'share anywhere. Restoring replaces your current data and '
+                    're-arms your reminders and alarms. Chat history is not '
+                    'included.',
                     style: TextStyle(
                         color: AppColors.textSecondary, fontSize: 11, height: 1.5),
                   ),

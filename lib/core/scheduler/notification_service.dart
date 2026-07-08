@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 // ignore: depend_on_referenced_packages
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'alarm_service.dart' show reminderActionCallback;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._();
@@ -20,7 +21,8 @@ class NotificationService {
 
     await _fln.initialize(
       initSettings,
-      onDidReceiveNotificationResponse: handleAction,
+      onDidReceiveNotificationResponse: reminderActionCallback,
+      onDidReceiveBackgroundNotificationResponse: reminderActionCallback,
     );
 
     const channel = AndroidNotificationChannel(
@@ -123,9 +125,5 @@ class NotificationService {
 
   Future<void> cancel(int id) async {
     await _fln.cancel(id);
-  }
-
-  void handleAction(NotificationResponse response) {
-    // Notification action callbacks handled in chat screen via streams
   }
 }

@@ -462,8 +462,9 @@ class IntentRouter {
         body: null,
         scheduledAt: target,
       );
-      final dueStr = DateHelper.nowIso().substring(0, 10) +
-          ' ${hhmm.padLeft(5, '0')}';
+      String two(int n) => n.toString().padLeft(2, '0');
+      final dueStr =
+          '${target.year}-${two(target.month)}-${two(target.day)} ${two(target.hour)}:${two(target.minute)}';
       final taskId = await _taskRepo.insert(Task(
         title: latestReminder.title,
         type: 'reminder',

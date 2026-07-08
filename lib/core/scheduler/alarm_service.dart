@@ -6,6 +6,7 @@ import '../db/database.dart';
 import '../db/repositories/alarm_repository.dart';
 import '../db/repositories/task_repository.dart';
 import '../../models/alarm_model.dart';
+import '../../models/task.dart';
 import '../../utils/id_generator.dart';
 import '../../widget/widget_provider.dart';
 
@@ -51,10 +52,15 @@ void reminderCallback(int id) async {
   final body = prefs.getString('reminder_body_$id') ?? '';
 
   final fln = FlutterLocalNotificationsPlugin();
+  // Register the action handler here too: this runs in a background isolate, and
+  // its initialize() must not leave the plugin without the background response
+  // handler (that would break Done/Snooze taps when the app is killed).
   await fln.initialize(
     const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ),
+    onDidReceiveNotificationResponse: reminderActionCallback,
+    onDidReceiveBackgroundNotificationResponse: reminderActionCallback,
   );
 
   const channel = AndroidNotificationChannel(
@@ -82,6 +88,12 @@ void reminderCallback(int id) async {
         category: AndroidNotificationCategory.reminder,
         enableVibration: true,
         autoCancel: true,
+        actions: <AndroidNotificationAction>[
+          AndroidNotificationAction('reminder_done', 'Done',
+              showsUserInterface: false, cancelNotification: true),
+          AndroidNotificationAction('reminder_snooze', 'Snooze 10 min',
+              showsUserInterface: false, cancelNotification: true),
+        ],
       ),
     ),
   );
@@ -95,6 +107,85 @@ void reminderCallback(int id) async {
     await AndroidAlarmManager.cancel(id);
     await prefs.remove('reminder_title_$id');
     await prefs.remove('reminder_body_$id');
+    await WidgetProvider.refresh();
+  } catch (_) {}
+}
+
+String _two(int n) => n.toString().padLeft(2, '0');
+
+/// Handles taps on a reminder notification's action buttons ("Done" /
+/// "Snooze 10 min"). The plugin invokes this in the foreground isolate when the
+/// app is alive, or a fresh background isolate otherwise — so it only touches
+/// the DB, prefs and AlarmManager, never UI. Non-reminder actions are ignored.
+@pragma('vm:entry-point')
+void reminderActionCallback(NotificationResponse response) async {
+  final id = response.id;
+  final action = response.actionId;
+  if (id == null || action == null) return;
+  if (action != 'reminder_snooze' && action != 'reminder_done') return;
+
+  final fln = FlutterLocalNotificationsPlugin();
+  await fln.cancel(id);
+
+  // Find the owning reminder (it was marked complete when it fired, so search
+  // ALL tasks, not just active ones).
+  Task? owner;
+  try {
+    final db = await DatabaseHelper.instance.database;
+    final all = await TaskRepository(db).getAll();
+    for (final t in all) {
+      if (t.type == 'reminder' && t.notificationIds.contains(id)) {
+        owner = t;
+        break;
+      }
+    }
+  } catch (_) {}
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+
+  if (action == 'reminder_snooze') {
+    final snoozeAt = DateTime.now().add(const Duration(minutes: 10));
+    // reminderCallback cleared the title/body prefs when it fired — restore
+    // them (from the task if needed) so the re-armed alarm can display.
+    final title = prefs.getString('reminder_title_$id') ?? owner?.title ?? 'Reminder';
+    await prefs.setString('reminder_title_$id', title);
+    await prefs.setString(
+        'reminder_body_$id', prefs.getString('reminder_body_$id') ?? '');
+
+    await AndroidAlarmManager.oneShotAt(
+      snoozeAt,
+      id,
+      reminderCallback,
+      exact: true,
+      wakeup: true,
+      rescheduleOnReboot: true,
+    );
+
+    // Revive the task so it re-appears in the list and the re-fire's
+    // idempotency guard passes; push its due date to the snooze time so the
+    // stale-reminder cleanup doesn't immediately re-complete it.
+    if (owner?.id != null) {
+      final db = await DatabaseHelper.instance.database;
+      final repo = TaskRepository(db);
+      await repo.markActive(owner!.id!);
+      final due =
+          '${snoozeAt.year}-${_two(snoozeAt.month)}-${_two(snoozeAt.day)} ${_two(snoozeAt.hour)}:${_two(snoozeAt.minute)}';
+      await repo.updateDueDate(owner.id!, due);
+    }
+  } else {
+    // Done: finalise. Complete the task, cancel any pending (snoozed) alarm,
+    // and clear its pref keys.
+    if (owner?.id != null) {
+      final db = await DatabaseHelper.instance.database;
+      await TaskRepository(db).markComplete(owner!.id!);
+    }
+    await AndroidAlarmManager.cancel(id);
+    await prefs.remove('reminder_title_$id');
+    await prefs.remove('reminder_body_$id');
+  }
+
+  try {
     await WidgetProvider.refresh();
   } catch (_) {}
 }
@@ -175,10 +266,14 @@ void recurringReminderCallback(int id) async {
   }
 
   final fln = FlutterLocalNotificationsPlugin();
+  // Keep the background action handler registered (see reminderCallback) so a
+  // recurring fire in this isolate doesn't clear it and break reminder actions.
   await fln.initialize(
     const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ),
+    onDidReceiveNotificationResponse: reminderActionCallback,
+    onDidReceiveBackgroundNotificationResponse: reminderActionCallback,
   );
 
   const channel = AndroidNotificationChannel(
@@ -399,6 +494,67 @@ class AlarmService {
     await prefs.remove('recur_time_$id');
     await prefs.remove('recur_freq_$id');
     await prefs.remove('recur_weekday_$id');
+  }
+
+  /// Re-arm every scheduled item from the current DB + prefs. Used after a
+  /// data restore: native alarms come back from the DB, one-time reminders from
+  /// their (future) due date, and recurring from the notify time stored in
+  /// prefs. Each item is best-effort — a failure on one never aborts the rest.
+  Future<void> rearmAllFromDb() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final db = await DatabaseHelper.instance.database;
+
+    // Native alarms (time + recurrence live in the DB).
+    try {
+      await rescheduleAllAfterReboot();
+    } catch (_) {}
+
+    final now = DateTime.now();
+    final tasks = await TaskRepository(db).getActive();
+    for (final t in tasks) {
+      try {
+        if (t.type == 'reminder') {
+          if (t.dueDate == null) continue;
+          final due = DateTime.tryParse(t.dueDate!.replaceFirst(' ', 'T'));
+          if (due == null || !due.isAfter(now)) continue;
+          for (final id in t.notificationIds) {
+            if (prefs.getString('reminder_title_$id') == null) {
+              await prefs.setString('reminder_title_$id', t.title);
+              await prefs.setString('reminder_body_$id', '');
+            }
+            await AndroidAlarmManager.oneShotAt(
+              due,
+              id,
+              reminderCallback,
+              exact: true,
+              wakeup: true,
+              rescheduleOnReboot: true,
+            );
+          }
+        } else if (t.type == 'recurring') {
+          for (final id in t.notificationIds) {
+            final time = prefs.getString('recur_time_$id');
+            if (time == null) continue; // notify time unknown — can't re-arm
+            final parts = time.split(':');
+            var startAt = DateTime(now.year, now.month, now.day,
+                int.parse(parts[0]), int.parse(parts[1]));
+            if (startAt.isBefore(now)) {
+              startAt = startAt.add(const Duration(days: 1));
+            }
+            await AndroidAlarmManager.periodic(
+              const Duration(days: 1),
+              id,
+              recurringReminderCallback,
+              startAt: startAt,
+              exact: true,
+              wakeup: true,
+              rescheduleOnReboot: true,
+            );
+          }
+        }
+      } catch (_) {}
+    }
   }
 
   /// Clean up one-time reminders whose scheduled time has passed but were never

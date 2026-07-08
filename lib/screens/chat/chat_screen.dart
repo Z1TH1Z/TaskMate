@@ -6,6 +6,7 @@ import '../../core/db/database.dart';
 import '../../core/db/repositories/chat_repository.dart';
 import '../../core/llm/groq_service.dart' show GroqService, GroqRateLimitException;
 import '../../core/llm/intent_parser.dart';
+import '../../core/llm/offline_parser.dart';
 import '../../core/router/intent_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/theme_provider.dart';
@@ -101,11 +102,43 @@ class _ChatScreenState extends State<ChatScreen> {
         _scrollToBottom();
       }
     } catch (e) {
+      // Groq is unreachable or rate-limited — fall back to the on-device
+      // parser for common phrasings so the app still works offline.
+      final offline = OfflineParser.parse(text);
+      if (offline.isNotEmpty) {
+        try {
+          final intents = IntentParser().parse(offline, text);
+          final replies = await _router.route(intents);
+          final body = replies.isEmpty ? 'Done.' : replies.join('\n\n');
+          final reply = '⚡ Offline — handled on-device (AI unavailable).\n\n$body';
+
+          await _chatRepo.insert(ChatMessage(
+            role: 'assistant',
+            content: reply,
+            createdAt: DateHelper.nowIso(),
+          ));
+          await WidgetProvider.refresh();
+
+          if (mounted) {
+            setState(() {
+              _messages.add(_Message(reply, false));
+              _loading = false;
+            });
+            _scrollToBottom();
+          }
+          return;
+        } catch (_) {
+          // Fall through to the error message below.
+        }
+      }
+
       final msg = e is GroqRateLimitException
           ? (e.retryAfterSeconds != null
               ? 'Slow down a sec — Groq rate limit hit. Try again in ${e.retryAfterSeconds}s.'
               : 'Slow down a sec — Groq rate limit hit. Give it a few seconds and retry.')
-          : 'Something went wrong: $e';
+          : _isNetworkError(e)
+              ? "Can't reach the AI — check your connection. I can still handle simple commands offline like \"remind me to call mom at 6pm\" or \"set alarm at 7am\"."
+              : 'Something went wrong: $e';
 
       await _chatRepo.insert(ChatMessage(
         role: 'assistant',
@@ -121,6 +154,16 @@ class _ChatScreenState extends State<ChatScreen> {
         _scrollToBottom();
       }
     }
+  }
+
+  bool _isNetworkError(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('socketexception') ||
+        s.contains('failed host lookup') ||
+        s.contains('clientexception') ||
+        s.contains('connection') ||
+        s.contains('network is unreachable') ||
+        s.contains('timed out');
   }
 
   Future<void> _toggleVoice() async {
