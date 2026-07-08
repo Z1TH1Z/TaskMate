@@ -20,13 +20,11 @@ class ChatRepository {
   }
 
   Future<void> pruneOld() async {
-    final maps = await _db.query(
-      'chat_history',
-      orderBy: 'created_at DESC',
-      offset: 50,
-    );
-    for (final map in maps) {
-      await _db.delete('chat_history', where: 'id = ?', whereArgs: [map['id']]);
-    }
+    await _db.rawDelete('''
+      DELETE FROM chat_history
+      WHERE id NOT IN (
+        SELECT id FROM chat_history ORDER BY created_at DESC LIMIT 50
+      )
+    ''');
   }
 }

@@ -53,6 +53,17 @@ void main() {
       final result = IntentParser.correctTimeForTest('15:00', 'alarm at 3');
       expect(result, '15:00');
     });
+
+    test('multiple AM/PM references leave a valid PM time untouched', () {
+      // "6am and 6pm" → the 18:00 must NOT be rewritten back to 06:00.
+      final result = IntentParser.correctTimeForTest('18:00', 'remind me at 6am and 6pm');
+      expect(result, '18:00');
+    });
+
+    test('multiple AM/PM references leave the AM time untouched', () {
+      final result = IntentParser.correctTimeForTest('06:00', 'remind me at 6am and 6pm');
+      expect(result, '06:00');
+    });
   });
 
   group('Multi-alarm spacing', () {

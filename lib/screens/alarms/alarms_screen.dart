@@ -83,10 +83,24 @@ class _AlarmsScreenState extends State<AlarmsScreen> {
     }
   }
 
+  Future<void> _deactivateNow(AlarmModel a) async {
+    final db = await DatabaseHelper.instance.database;
+    if (a.id != null) await AlarmRepository(db).deactivateById(a.id!);
+  }
+
+  Future<void> _reactivateNow(AlarmModel a) async {
+    final db = await DatabaseHelper.instance.database;
+    if (a.id != null) {
+      await db.update('alarms', {'is_active': 1},
+          where: 'id = ?', whereArgs: [a.id]);
+    }
+  }
+
   void _cancelWithUndo(AlarmModel a) {
     final idx = _alarms.indexOf(a);
     setState(() { _alarms.remove(a); });
     HapticFeedback.mediumImpact();
+    _deactivateNow(a);
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -96,6 +110,7 @@ class _AlarmsScreenState extends State<AlarmsScreen> {
           label: 'UNDO',
           textColor: Theme.of(context).colorScheme.primary,
           onPressed: () {
+            _reactivateNow(a);
             setState(() {
               if (idx >= 0 && idx <= _alarms.length) {
                 _alarms.insert(idx, a);
@@ -117,9 +132,6 @@ class _AlarmsScreenState extends State<AlarmsScreen> {
   Future<void> _doCancel(AlarmModel a) async {
     if (a.androidAlarmId != null) {
       await AlarmService().cancelAlarm(a.androidAlarmId!);
-    } else if (a.id != null) {
-      final db = await DatabaseHelper.instance.database;
-      await AlarmRepository(db).deactivateById(a.id!);
     }
     await WidgetProvider.refresh();
   }

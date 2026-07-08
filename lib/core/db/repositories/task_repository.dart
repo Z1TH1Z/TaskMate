@@ -66,6 +66,15 @@ class TaskRepository {
     );
   }
 
+  Future<void> markActive(int id) async {
+    await _db.update(
+      'tasks',
+      {'is_completed': 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   Future<void> updateNotificationIds(int id, List<int> ids) async {
     await _db.update(
       'tasks',

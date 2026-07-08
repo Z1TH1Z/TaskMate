@@ -106,6 +106,13 @@ class _ChatScreenState extends State<ChatScreen> {
               ? 'Slow down a sec — Groq rate limit hit. Try again in ${e.retryAfterSeconds}s.'
               : 'Slow down a sec — Groq rate limit hit. Give it a few seconds and retry.')
           : 'Something went wrong: $e';
+
+      await _chatRepo.insert(ChatMessage(
+        role: 'assistant',
+        content: msg,
+        createdAt: DateHelper.nowIso(),
+      ));
+
       if (mounted) {
         setState(() {
           _messages.add(_Message(msg, false));

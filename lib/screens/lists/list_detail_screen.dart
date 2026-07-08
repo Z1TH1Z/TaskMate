@@ -29,6 +29,27 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
     if (mounted) setState(() => _items = items);
   }
 
+  Future<void> _markDoneInDb(int id) async {
+    final db = await DatabaseHelper.instance.database;
+    await ListRepository(db).markItemDone(id);
+  }
+
+  Future<void> _markUndoneInDb(int id) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.update('list_items', {'is_done': 0},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> _deleteInDb(int id) async {
+    final db = await DatabaseHelper.instance.database;
+    await ListRepository(db).deleteItem(id);
+  }
+
+  Future<void> _reinsertInDb(ListItem item) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.insert('list_items', item.toMap());
+  }
+
   void _toggleDoneWithUndo(ListItem item) {
     if (item.isDone) return;
     final idx = _items.indexOf(item);
@@ -41,6 +62,7 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
     );
     setState(() => _items[idx] = updated);
     HapticFeedback.lightImpact();
+    _markDoneInDb(item.id!);
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -50,27 +72,20 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
           label: 'UNDO',
           textColor: Theme.of(context).colorScheme.primary,
           onPressed: () {
+            _markUndoneInDb(item.id!);
             setState(() => _items[idx] = item);
           },
         ),
         duration: const Duration(seconds: 4),
       ),
-    ).closed.then((reason) {
-      if (reason != SnackBarClosedReason.action) {
-        _doMarkDone(item);
-      }
-    });
-  }
-
-  Future<void> _doMarkDone(ListItem item) async {
-    final db = await DatabaseHelper.instance.database;
-    await ListRepository(db).markItemDone(item.id!);
+    );
   }
 
   void _deleteWithUndo(ListItem item) {
     final idx = _items.indexOf(item);
     setState(() => _items.remove(item));
     HapticFeedback.mediumImpact();
+    _deleteInDb(item.id!);
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -80,6 +95,7 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
           label: 'UNDO',
           textColor: Theme.of(context).colorScheme.primary,
           onPressed: () {
+            _reinsertInDb(item);
             setState(() {
               if (idx >= 0 && idx <= _items.length) {
                 _items.insert(idx, item);
@@ -91,16 +107,7 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
         ),
         duration: const Duration(seconds: 4),
       ),
-    ).closed.then((reason) {
-      if (reason != SnackBarClosedReason.action) {
-        _doDelete(item);
-      }
-    });
-  }
-
-  Future<void> _doDelete(ListItem item) async {
-    final db = await DatabaseHelper.instance.database;
-    await ListRepository(db).deleteItem(item.id!);
+    );
   }
 
   Future<void> _deleteList() async {

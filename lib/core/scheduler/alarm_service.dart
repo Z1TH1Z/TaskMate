@@ -92,6 +92,7 @@ void reminderCallback(int id) async {
       final db = await DatabaseHelper.instance.database;
       await TaskRepository(db).markComplete(ownerTaskId);
     }
+    await AndroidAlarmManager.cancel(id);
     await prefs.remove('reminder_title_$id');
     await prefs.remove('reminder_body_$id');
     await WidgetProvider.refresh();
@@ -112,6 +113,9 @@ void recurringReminderCallback(int id) async {
   final endStr = prefs.getString('recur_end_$id');
   final schedTime = prefs.getString('recur_time_$id'); // 'HH:MM'
 
+  final freq = prefs.getString('recur_freq_$id') ?? 'daily';
+  final weekday = prefs.getInt('recur_weekday_$id');
+
   final now = DateTime.now();
 
   // Lifecycle guard: stop if the owning recurring task was completed/removed.
@@ -126,6 +130,8 @@ void recurringReminderCallback(int id) async {
       await prefs.remove('recur_skip_$id');
       await prefs.remove('recur_end_$id');
       await prefs.remove('recur_time_$id');
+      await prefs.remove('recur_freq_$id');
+      await prefs.remove('recur_weekday_$id');
       return;
     }
   } catch (_) {}
@@ -150,6 +156,8 @@ void recurringReminderCallback(int id) async {
       await prefs.remove('recur_skip_$id');
       await prefs.remove('recur_end_$id');
       await prefs.remove('recur_time_$id');
+      await prefs.remove('recur_freq_$id');
+      await prefs.remove('recur_weekday_$id');
       return;
     }
   }
@@ -157,6 +165,12 @@ void recurringReminderCallback(int id) async {
   // Weekday-only schedule → silently skip weekends (alarm still fires tomorrow).
   if (skipWeekends &&
       (now.weekday == DateTime.saturday || now.weekday == DateTime.sunday)) {
+    return;
+  }
+
+  // Weekly schedule → the alarm fires daily, but only show on the anchor
+  // weekday so the effective cadence is once a week.
+  if (freq == 'weekly' && weekday != null && now.weekday != weekday) {
     return;
   }
 
@@ -325,6 +339,7 @@ class AlarmService {
     required String title,
     required List<String> times,
     required bool skipWeekends,
+    String recurrence = 'daily',
     DateTime? endDate,
   }) async {
     final ids = <int>[];
@@ -346,6 +361,11 @@ class AlarmService {
       await prefs.setString('recur_title_$id', title);
       await prefs.setBool('recur_skip_$id', skipWeekends);
       await prefs.setString('recur_time_$id', time);
+      await prefs.setString('recur_freq_$id', recurrence);
+      if (recurrence == 'weekly') {
+        // Anchor the weekly cadence to the weekday of the first fire.
+        await prefs.setInt('recur_weekday_$id', startAt.weekday);
+      }
       if (endDate != null) {
         await prefs.setString('recur_end_$id', endDate.toIso8601String());
       }
@@ -377,6 +397,30 @@ class AlarmService {
     await prefs.remove('recur_skip_$id');
     await prefs.remove('recur_end_$id');
     await prefs.remove('recur_time_$id');
+    await prefs.remove('recur_freq_$id');
+    await prefs.remove('recur_weekday_$id');
+  }
+
+  /// Clean up one-time reminders whose scheduled time has passed but were never
+  /// marked complete (e.g. background isolate killed by OS before DB write).
+  Future<void> cleanupStaleReminders() async {
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final repo = TaskRepository(db);
+      final active = await repo.getActive();
+      final now = DateTime.now();
+      for (final task in active) {
+        if (task.type == 'reminder' && task.dueDate != null) {
+          final due = DateTime.tryParse(task.dueDate!.replaceFirst(' ', 'T'));
+          if (due != null && due.isBefore(now)) {
+            await repo.markComplete(task.id!);
+            for (final id in task.notificationIds) {
+              await cancelReminder(id);
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> rescheduleAllAfterReboot() async {

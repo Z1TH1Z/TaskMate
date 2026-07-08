@@ -52,9 +52,26 @@ class _TasksScreenState extends State<TasksScreen> {
     if (mounted) setState(() { _tasks = tasks; _loading = false; });
   }
 
+  Future<void> _markCompleteNow(Task task) async {
+    final db = await DatabaseHelper.instance.database;
+    if (task.id != null) await TaskRepository(db).markComplete(task.id!);
+  }
+
+  Future<void> _markActiveNow(Task task) async {
+    final db = await DatabaseHelper.instance.database;
+    if (task.id != null) await TaskRepository(db).markActive(task.id!);
+  }
+
+  Future<void> _cancelNotifications(Task task) async {
+    final db = await DatabaseHelper.instance.database;
+    await IntentRouter(db).route([CompleteIntent(searchTerm: task.title, scope: 'all')]);
+    await WidgetProvider.refresh();
+  }
+
   void _completeWithUndo(Task task) {
     final idx = _tasks.indexOf(task);
     setState(() => _tasks.remove(task));
+    _markCompleteNow(task);
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -64,6 +81,7 @@ class _TasksScreenState extends State<TasksScreen> {
           label: 'UNDO',
           textColor: Theme.of(context).colorScheme.primary,
           onPressed: () {
+            _markActiveNow(task);
             setState(() {
               if (idx >= 0 && idx <= _tasks.length) {
                 _tasks.insert(idx, task);
@@ -77,7 +95,7 @@ class _TasksScreenState extends State<TasksScreen> {
       ),
     ).closed.then((reason) {
       if (reason != SnackBarClosedReason.action) {
-        _doComplete(task);
+        _cancelNotifications(task);
       }
     });
   }
@@ -85,6 +103,7 @@ class _TasksScreenState extends State<TasksScreen> {
   void _deleteWithUndo(Task task) {
     final idx = _tasks.indexOf(task);
     setState(() => _tasks.remove(task));
+    _markCompleteNow(task);
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -94,6 +113,7 @@ class _TasksScreenState extends State<TasksScreen> {
           label: 'UNDO',
           textColor: Theme.of(context).colorScheme.primary,
           onPressed: () {
+            _markActiveNow(task);
             setState(() {
               if (idx >= 0 && idx <= _tasks.length) {
                 _tasks.insert(idx, task);
@@ -107,15 +127,9 @@ class _TasksScreenState extends State<TasksScreen> {
       ),
     ).closed.then((reason) {
       if (reason != SnackBarClosedReason.action) {
-        _doComplete(task);
+        _cancelNotifications(task);
       }
     });
-  }
-
-  Future<void> _doComplete(Task task) async {
-    final db = await DatabaseHelper.instance.database;
-    await IntentRouter(db).route([CompleteIntent(searchTerm: task.title, scope: 'all')]);
-    await WidgetProvider.refresh();
   }
 
   Map<String, List<Task>> _grouped() {

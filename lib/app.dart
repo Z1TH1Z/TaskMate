@@ -125,7 +125,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      AlarmService().reconcileFiredAlarms().then((_) => WidgetProvider.refresh());
+      AlarmService().reconcileFiredAlarms().then((_) =>
+        AlarmService().cleanupStaleReminders()).then((_) =>
+        WidgetProvider.refresh());
     }
   }
 

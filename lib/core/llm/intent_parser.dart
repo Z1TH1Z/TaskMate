@@ -189,8 +189,14 @@ class IntentParser {
   /// Corrects an HH:MM time based on AM/PM in the user's message.
   static String _correctTime(String time, String userMessage) {
     final msg = userMessage.toLowerCase();
-    final ampmMatch = RegExp(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)', caseSensitive: false)
-        .firstMatch(msg);
+    final ampmRe = RegExp(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)', caseSensitive: false);
+
+    // With more than one AM/PM reference in the message (e.g. "6am and 6pm"),
+    // we can't safely attribute a single period to this specific time — doing
+    // so would corrupt the other time. Trust the LLM's output in that case.
+    if (ampmRe.allMatches(msg).length > 1) return time;
+
+    final ampmMatch = ampmRe.firstMatch(msg);
     if (ampmMatch == null) return time;
 
     final userHour = int.parse(ampmMatch.group(1)!);

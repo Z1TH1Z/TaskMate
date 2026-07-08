@@ -62,8 +62,10 @@ Future<void> main() async {
     await prefs.setBool('native_alarms_migrated', true);
   }
 
-  // Populate the home widget on launch so it shows real data even before
-  // the user sends a chat message.
+  // Clean up any one-time reminders that fired but weren't marked complete
+  // (e.g. background isolate was killed by the OS before DB write finished).
+  await AlarmService().cleanupStaleReminders();
+
   await WidgetProvider.refresh();
 
   runApp(const TaskMateApp());

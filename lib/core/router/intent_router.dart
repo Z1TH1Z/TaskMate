@@ -134,6 +134,7 @@ class IntentRouter {
       title: intent.title,
       times: intent.notifyTimes,
       skipWeekends: skipWeekends,
+      recurrence: intent.recurrence,
       endDate: endDate,
     );
     await _taskRepo.updateNotificationIds(taskId, ids);
@@ -220,14 +221,23 @@ class IntentRouter {
           : await _taskRepo.searchByTitle(intent.searchTerm);
 
       for (final task in tasks) {
-        for (final id in task.notificationIds) {
-          await notifService.cancel(id);
-          await AlarmService().cancelReminder(id);
-        }
         if (intent.scope == 'today' && !isWildcard) {
-          await _taskRepo.clearTodayNotifications(task.id!);
+          if (task.type == 'recurring') {
+            for (final id in task.notificationIds) {
+              await notifService.cancel(id);
+            }
+          } else {
+            for (final id in task.notificationIds) {
+              await notifService.cancel(id);
+              await AlarmService().cancelReminder(id);
+            }
+          }
           responses.add("Got it. No more reminders for '${task.title}' today.");
         } else {
+          for (final id in task.notificationIds) {
+            await notifService.cancel(id);
+            await AlarmService().cancelReminder(id);
+          }
           await _taskRepo.updateNotificationIds(task.id!, []);
           await _taskRepo.markComplete(task.id!);
           responses.add("'${task.title}' marked done.");
@@ -392,29 +402,32 @@ class IntentRouter {
       }
     }
 
-    // Reschedule matching reminder tasks.
+    // Reschedule matching reminder tasks. Validate the new time BEFORE touching
+    // the existing alarm — otherwise a bad/past time would cancel the reminder
+    // and leave the task orphaned (active but with no alarm behind it).
     if (intent.newDatetime != null) {
+      DateTime? newDt;
+      try {
+        newDt = DateTime.parse(intent.newDatetime!.replaceFirst(' ', 'T'));
+      } catch (_) {}
+      if (newDt == null || !newDt.isAfter(DateTime.now())) {
+        return "Couldn't reschedule — that time is invalid or already past. Your reminder is unchanged.";
+      }
       final tasks = await _taskRepo.searchByTitle(term);
       for (final task in tasks.where((t) => t.type == 'reminder')) {
         for (final id in task.notificationIds) {
           await AlarmService().cancelReminder(id);
         }
-        DateTime? newDt;
-        try {
-          newDt = DateTime.parse(intent.newDatetime!.replaceFirst(' ', 'T'));
-        } catch (_) {}
-        if (newDt != null && newDt.isAfter(DateTime.now())) {
-          final notifId = generateId();
-          await AlarmService().scheduleReminder(
-            id: notifId,
-            title: task.title,
-            body: null,
-            scheduledAt: newDt,
-          );
-          await _taskRepo.updateDueDate(task.id!, intent.newDatetime!);
-          await _taskRepo.updateNotificationIds(task.id!, [notifId]);
-          responses.add('Reminder "${task.title}" moved to ${DateHelper.formatDisplay(intent.newDatetime)}.');
-        }
+        final notifId = generateId();
+        await AlarmService().scheduleReminder(
+          id: notifId,
+          title: task.title,
+          body: null,
+          scheduledAt: newDt,
+        );
+        await _taskRepo.updateDueDate(task.id!, intent.newDatetime!);
+        await _taskRepo.updateNotificationIds(task.id!, [notifId]);
+        responses.add('Reminder "${task.title}" moved to ${DateHelper.formatDisplay(intent.newDatetime)}.');
       }
     }
 
@@ -449,6 +462,16 @@ class IntentRouter {
         body: null,
         scheduledAt: target,
       );
+      final dueStr = DateHelper.nowIso().substring(0, 10) +
+          ' ${hhmm.padLeft(5, '0')}';
+      final taskId = await _taskRepo.insert(Task(
+        title: latestReminder.title,
+        type: 'reminder',
+        dueDate: dueStr,
+        notificationIds: [notifId],
+        createdAt: DateHelper.nowIso(),
+      ));
+      await _taskRepo.updateNotificationIds(taskId, [notifId]);
       return '✓ "${latestReminder.title}" reminder repeated\n${DateHelper.formatTime(hhmm)}';
     }
 
