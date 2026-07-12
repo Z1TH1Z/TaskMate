@@ -1,5 +1,6 @@
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
+import 'package:sqflite/sqflite.dart';
 import '../core/db/database.dart';
 import '../core/db/repositories/task_repository.dart';
 import '../core/db/repositories/alarm_repository.dart';
@@ -62,7 +63,7 @@ class WidgetProvider {
 
   /// Titles of every Daily Non-Negotiable still undone today, across all three
   /// sections. Queried directly (no repo) so it never creates rows.
-  static Future<List<String>> _pendingNonNegotiables(dynamic db) async {
+  static Future<List<String>> _pendingNonNegotiables(Database db) async {
     final lists = await db.query('lists',
         columns: ['id'], where: "category = 'nonnegotiable'");
     final pending = <String>[];
