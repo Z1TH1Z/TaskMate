@@ -7,6 +7,7 @@ import '../../core/scheduler/alarm_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/task_list.dart';
 import '../../models/list_item.dart';
+import '../../widget/widget_provider.dart';
 
 /// Daily Non-Negotiables — three fixed sections (Intellectual / Physical /
 /// Spiritual). Each holds items the user adds/removes, resets its checkboxes
@@ -96,6 +97,7 @@ class _NonNegotiablesScreenState extends State<NonNegotiablesScreen> {
     HapticFeedback.lightImpact();
     _items[section.id!] = await repo.getItems(section.id!);
     if (mounted) setState(() {});
+    WidgetProvider.refresh();
   }
 
   Future<void> _toggleDone(TaskList section, ListItem item) async {
@@ -105,6 +107,7 @@ class _NonNegotiablesScreenState extends State<NonNegotiablesScreen> {
     HapticFeedback.selectionClick();
     _items[section.id!] = await repo.getItems(section.id!);
     if (mounted) setState(() {});
+    WidgetProvider.refresh();
   }
 
   Future<void> _deleteItem(TaskList section, ListItem item) async {
@@ -113,6 +116,7 @@ class _NonNegotiablesScreenState extends State<NonNegotiablesScreen> {
     setState(() => _items[section.id!]!.remove(item));
     HapticFeedback.mediumImpact();
     await repo.deleteItem(item.id!);
+    WidgetProvider.refresh();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -127,6 +131,7 @@ class _NonNegotiablesScreenState extends State<NonNegotiablesScreen> {
                 listId: item.listId, title: item.title, isDone: item.isDone));
             _items[section.id!] = await repo.getItems(section.id!);
             if (mounted) setState(() {});
+            WidgetProvider.refresh();
           },
         ),
         duration: const Duration(seconds: 4),
@@ -155,10 +160,26 @@ class _NonNegotiablesScreenState extends State<NonNegotiablesScreen> {
     if (picked == null) return;
     final time =
         '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-    await AlarmService().scheduleNonNegotiableReminder(
-        slug: slug, name: section.name, time: time);
+
+    // Reflect the new time in the UI immediately — the reminder is (re)armed in
+    // the background so a scheduling hiccup (e.g. exact-alarm permission) can
+    // never leave the chip showing the old time.
     HapticFeedback.lightImpact();
     if (mounted) setState(() => _times[slug] = time);
+
+    try {
+      await AlarmService().scheduleNonNegotiableReminder(
+          slug: slug, name: section.name, time: time);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Time saved. Allow "Alarms & reminders" in system settings so it can fire.'),
+          ),
+        );
+      }
+    }
   }
 
   Future<String?> _promptText(String title, String hint) {
@@ -288,16 +309,22 @@ class _NonNegotiablesScreenState extends State<NonNegotiablesScreen> {
                         fontWeight: FontWeight.w600)),
                 const Spacer(),
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => _editTime(section),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.notifications_none,
-                          size: 13, color: AppColors.textSecondary),
-                      const SizedBox(width: 4),
-                      Text(time == null ? '--' : _pretty(time),
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 11)),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.notifications_none,
+                            size: 13, color: AppColors.textSecondary),
+                        const SizedBox(width: 4),
+                        Text(time == null ? '--' : _pretty(time),
+                            style: const TextStyle(
+                                color: AppColors.textSecondary, fontSize: 11)),
+                        const Icon(Icons.edit,
+                            size: 10, color: AppColors.textSecondary),
+                      ],
+                    ),
                   ),
                 ),
                 IconButton(

@@ -60,11 +60,28 @@ class WidgetProvider {
         : reminderLabel;
   }
 
+  /// Titles of every Daily Non-Negotiable still undone today, across all three
+  /// sections. Queried directly (no repo) so it never creates rows.
+  static Future<List<String>> _pendingNonNegotiables(dynamic db) async {
+    final lists = await db.query('lists',
+        columns: ['id'], where: "category = 'nonnegotiable'");
+    final pending = <String>[];
+    for (final l in lists) {
+      final items = await db.query('list_items',
+          columns: ['title'],
+          where: 'list_id = ? AND is_done = 0',
+          whereArgs: [l['id']]);
+      pending.addAll(items.map((m) => m['title'] as String));
+    }
+    return pending;
+  }
+
   static Future<void> refresh() async {
     try {
       final db = await DatabaseHelper.instance.database;
       final todayTasks = await TaskRepository(db).getTasksDueToday();
       final nextLabel = await _nextEventLabel(db);
+      final nnPending = await _pendingNonNegotiables(db);
 
       final accentHex = '#${ThemeProvider.instance.accent.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
       await HomeWidget.saveWidgetData('accent_color', accentHex);
@@ -73,6 +90,11 @@ class WidgetProvider {
       await HomeWidget.saveWidgetData(
         'task_preview',
         todayTasks.isEmpty ? 'All clear today' : todayTasks.first.title,
+      );
+      await HomeWidget.saveWidgetData('nonneg_count', nnPending.length);
+      await HomeWidget.saveWidgetData(
+        'nonneg_preview',
+        nnPending.isEmpty ? 'All done today' : nnPending.join(' · '),
       );
       await HomeWidget.updateWidget(
         androidName: 'TaskMateWidgetProvider',

@@ -24,6 +24,8 @@ class TaskMateWidgetProvider : AppWidgetProvider() {
                 val nextAlarm = widgetData.getString("next_alarm", "--:--")
                 val taskPreview = widgetData.getString("task_preview", "All clear today")
                 val accentHex = widgetData.getString("accent_color", "#10B981")
+                val nonnegCount = widgetData.getInt("nonneg_count", 0)
+                val nonnegPreview = widgetData.getString("nonneg_preview", "—")
 
                 val accentColor = try {
                     Color.parseColor(accentHex)
@@ -34,6 +36,11 @@ class TaskMateWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.widget_tasks_count, tasksToday.toString())
                 views.setTextViewText(R.id.widget_next_alarm, "Next alarm — $nextAlarm")
                 views.setTextViewText(R.id.widget_task_preview, taskPreview ?: "All clear today")
+
+                val nonnegLabel =
+                    if (nonnegCount > 0) "NON-NEGOTIABLES · $nonnegCount LEFT" else "NON-NEGOTIABLES"
+                views.setTextViewText(R.id.widget_nonneg_label, nonnegLabel)
+                views.setTextViewText(R.id.widget_nonneg_preview, nonnegPreview ?: "—")
 
                 views.setInt(R.id.widget_accent_bar, "setBackgroundColor", accentColor)
                 views.setTextColor(R.id.widget_tasks_count, accentColor)

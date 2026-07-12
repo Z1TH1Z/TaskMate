@@ -84,4 +84,34 @@
         android:maxLines="1"
         android:ellipsize="end" />
 
+    <!-- Divider -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1A1A1A"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:contentDescription="@null" />
+
+    <!-- Daily Non-Negotiables -->
+    <TextView
+        android:id="@+id/widget_nonneg_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="NON-NEGOTIABLES"
+        android:textColor="#555555"
+        android:textSize="9sp"
+        android:letterSpacing="0.1"
+        android:layout_marginBottom="3dp" />
+
+    <TextView
+        android:id="@+id/widget_nonneg_preview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="—"
+        android:textColor="#EBEBEB"
+        android:textSize="10sp"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
 </LinearLayout>
