@@ -95,7 +95,7 @@ class WidgetProvider {
       await HomeWidget.saveWidgetData('nonneg_count', nnPending.length);
       await HomeWidget.saveWidgetData(
         'nonneg_preview',
-        nnPending.isEmpty ? 'All done today' : nnPending.join(' · '),
+        nnPending.isEmpty ? 'All done today' : nnPending.join('\n'),
       );
       await HomeWidget.updateWidget(
         androidName: 'TaskMateWidgetProvider',
