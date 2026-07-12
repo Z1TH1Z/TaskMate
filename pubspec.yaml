@@ -1,7 +1,7 @@
 name: taskmate
 description: Personal LLM-powered task manager
 publish_to: 'none'
-version: 1.0.5+6
+version: 1.0.5+7
 
 environment:
   sdk: ^3.10.8

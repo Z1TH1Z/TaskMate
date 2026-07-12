@@ -167,19 +167,13 @@ class _NonNegotiablesScreenState extends State<NonNegotiablesScreen> {
     HapticFeedback.lightImpact();
     if (mounted) setState(() => _times[slug] = time);
 
+    // Re-arm in the background. Exact alarms are auto-granted via USE_EXACT_ALARM,
+    // so this doesn't fail for permission reasons; swallow any rare error rather
+    // than block the already-updated UI.
     try {
       await AlarmService().scheduleNonNegotiableReminder(
           slug: slug, name: section.name, time: time);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Time saved. Allow "Alarms & reminders" in system settings so it can fire.'),
-          ),
-        );
-      }
-    }
+    } catch (_) {}
   }
 
   Future<String?> _promptText(String title, String hint) {
