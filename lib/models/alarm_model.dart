@@ -36,4 +36,27 @@ class AlarmModel {
     androidAlarmId: map['android_alarm_id'] as int?,
     createdAt: map['created_at'] as String,
   );
+
+  /// The next [DateTime] this alarm will ring relative to [now]: later today if
+  /// its time is still ahead, otherwise the next day (weekday alarms skip the
+  /// weekend). `alarmTime` is always a well-formed 'HH:MM'; a malformed value
+  /// falls back to 00:00 rather than throwing.
+  DateTime nextFire(DateTime now) {
+    final p = alarmTime.split(':');
+    var dt = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      int.tryParse(p.isNotEmpty ? p[0] : '') ?? 0,
+      int.tryParse(p.length > 1 ? p[1] : '') ?? 0,
+    );
+    if (!dt.isAfter(now)) dt = dt.add(const Duration(days: 1));
+    if (recurrence == 'weekdays') {
+      while (dt.weekday == DateTime.saturday ||
+          dt.weekday == DateTime.sunday) {
+        dt = dt.add(const Duration(days: 1));
+      }
+    }
+    return dt;
+  }
 }

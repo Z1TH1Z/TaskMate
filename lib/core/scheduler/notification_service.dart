@@ -1,8 +1,4 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-// ignore: depend_on_referenced_packages
-import 'package:timezone/timezone.dart' as tz;
-// ignore: depend_on_referenced_packages
-import 'package:timezone/data/latest.dart' as tz_data;
 import 'alarm_service.dart' show reminderActionCallback;
 
 class NotificationService {
@@ -13,9 +9,6 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    tz_data.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
-
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidInit);
 
@@ -47,60 +40,6 @@ class NotificationService {
     await _fln
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(alarmChannel);
-  }
-
-  Future<int> scheduleOnce({
-    required int id,
-    required String title,
-    String? notes,
-    required DateTime scheduledAt,
-  }) async {
-    final tzTime = tz.TZDateTime.from(scheduledAt, tz.local);
-    await _fln.zonedSchedule(
-      id,
-      title,
-      notes ?? '',
-      tzTime,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'reminders',
-          'Reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
-    return id;
-  }
-
-  Future<void> showPersistent({
-    required int id,
-    required String title,
-    String body = '',
-  }) async {
-    await _fln.show(
-      id,
-      title,
-      body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'reminders',
-          'Reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-          ongoing: true,
-          autoCancel: false,
-          actions: [
-            AndroidNotificationAction('done_today', 'Done Today'),
-            AndroidNotificationAction('snooze_1h', 'Snooze 1 hr'),
-            AndroidNotificationAction('done_all', 'Done Forever'),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> showSimple({

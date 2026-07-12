@@ -17,6 +17,81 @@ import '../../widget/widget_provider.dart';
 // below (they only need a notification, not a ringing alarm).
 const MethodChannel _alarmChannel = MethodChannel('taskmate/alarm');
 
+/// The single notification channel every reminder-type callback posts on
+/// (one-time reminders, recurring, and daily non-negotiables).
+const AndroidNotificationChannel _remindersChannel = AndroidNotificationChannel(
+  'reminders',
+  'Reminders',
+  description: 'Task reminders and recurring notifications',
+  importance: Importance.high,
+);
+
+/// Initialise a fresh FLN plugin inside a background isolate and ensure the
+/// shared reminders channel exists. Every reminder-type callback needs this same
+/// setup, and must keep the background action handler registered (see
+/// [reminderActionCallback]) so Done/Snooze taps still work when the app is dead.
+Future<FlutterLocalNotificationsPlugin> _initReminderPlugin() async {
+  final fln = FlutterLocalNotificationsPlugin();
+  await fln.initialize(
+    const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    ),
+    onDidReceiveNotificationResponse: reminderActionCallback,
+    onDidReceiveBackgroundNotificationResponse: reminderActionCallback,
+  );
+  await fln
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(_remindersChannel);
+  return fln;
+}
+
+/// Notification details for a reminder post. [withActions] adds the Done /
+/// Snooze buttons (used only by one-time reminders).
+NotificationDetails _reminderDetails({bool withActions = false}) {
+  return NotificationDetails(
+    android: AndroidNotificationDetails(
+      'reminders',
+      'Reminders',
+      channelDescription: 'Task reminders and recurring notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.reminder,
+      enableVibration: true,
+      autoCancel: true,
+      actions: withActions
+          ? const <AndroidNotificationAction>[
+              AndroidNotificationAction('reminder_done', 'Done',
+                  showsUserInterface: false, cancelNotification: true),
+              AndroidNotificationAction('reminder_snooze', 'Snooze 10 min',
+                  showsUserInterface: false, cancelNotification: true),
+            ]
+          : null,
+    ),
+  );
+}
+
+/// Remove every SharedPreferences key that a recurring reminder stores for [id].
+Future<void> _clearRecurPrefs(SharedPreferences prefs, int id) async {
+  await prefs.remove('recur_title_$id');
+  await prefs.remove('recur_skip_$id');
+  await prefs.remove('recur_end_$id');
+  await prefs.remove('recur_time_$id');
+  await prefs.remove('recur_freq_$id');
+  await prefs.remove('recur_weekday_$id');
+}
+
+/// The next occurrence of a daily 'HH:MM' time: today if still ahead, else
+/// tomorrow. Shared by every scheduler that arms a clock-time alarm.
+DateTime _nextOccurrenceOf(String time) {
+  final parts = time.split(':');
+  final now = DateTime.now();
+  var dt = DateTime(
+      now.year, now.month, now.day, int.parse(parts[0]), int.parse(parts[1]));
+  if (dt.isBefore(now)) dt = dt.add(const Duration(days: 1));
+  return dt;
+}
+
 /// Runs in a background isolate when a REMINDER fires. We deliberately route
 /// reminders through android_alarm_manager_plus (which only runs Dart) and post
 /// the notification here with fln.show() — the SAME mechanism the alarm path
@@ -51,52 +126,8 @@ void reminderCallback(int id) async {
   final title = prefs.getString('reminder_title_$id') ?? 'Reminder';
   final body = prefs.getString('reminder_body_$id') ?? '';
 
-  final fln = FlutterLocalNotificationsPlugin();
-  // Register the action handler here too: this runs in a background isolate, and
-  // its initialize() must not leave the plugin without the background response
-  // handler (that would break Done/Snooze taps when the app is killed).
-  await fln.initialize(
-    const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    ),
-    onDidReceiveNotificationResponse: reminderActionCallback,
-    onDidReceiveBackgroundNotificationResponse: reminderActionCallback,
-  );
-
-  const channel = AndroidNotificationChannel(
-    'reminders',
-    'Reminders',
-    description: 'Task reminders and recurring notifications',
-    importance: Importance.high,
-  );
-  await fln
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
-
-  await fln.show(
-    id,
-    title,
-    body,
-    const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'reminders',
-        'Reminders',
-        channelDescription: 'Task reminders and recurring notifications',
-        importance: Importance.high,
-        priority: Priority.high,
-        category: AndroidNotificationCategory.reminder,
-        enableVibration: true,
-        autoCancel: true,
-        actions: <AndroidNotificationAction>[
-          AndroidNotificationAction('reminder_done', 'Done',
-              showsUserInterface: false, cancelNotification: true),
-          AndroidNotificationAction('reminder_snooze', 'Snooze 10 min',
-              showsUserInterface: false, cancelNotification: true),
-        ],
-      ),
-    ),
-  );
+  final fln = await _initReminderPlugin();
+  await fln.show(id, title, body, _reminderDetails(withActions: true));
 
   // One-shot reminder fired — mark the task complete so it leaves the list.
   try {
@@ -217,12 +248,7 @@ void recurringReminderCallback(int id) async {
         tasks.any((t) => t.type == 'recurring' && t.notificationIds.contains(id));
     if (!stillActive) {
       await AndroidAlarmManager.cancel(id);
-      await prefs.remove('recur_title_$id');
-      await prefs.remove('recur_skip_$id');
-      await prefs.remove('recur_end_$id');
-      await prefs.remove('recur_time_$id');
-      await prefs.remove('recur_freq_$id');
-      await prefs.remove('recur_weekday_$id');
+      await _clearRecurPrefs(prefs, id);
       return;
     }
   } catch (_) {}
@@ -243,12 +269,7 @@ void recurringReminderCallback(int id) async {
     final end = DateTime.tryParse(endStr);
     if (end != null && now.isAfter(end)) {
       await AndroidAlarmManager.cancel(id);
-      await prefs.remove('recur_title_$id');
-      await prefs.remove('recur_skip_$id');
-      await prefs.remove('recur_end_$id');
-      await prefs.remove('recur_time_$id');
-      await prefs.remove('recur_freq_$id');
-      await prefs.remove('recur_weekday_$id');
+      await _clearRecurPrefs(prefs, id);
       return;
     }
   }
@@ -265,45 +286,65 @@ void recurringReminderCallback(int id) async {
     return;
   }
 
-  final fln = FlutterLocalNotificationsPlugin();
-  // Keep the background action handler registered (see reminderCallback) so a
-  // recurring fire in this isolate doesn't clear it and break reminder actions.
-  await fln.initialize(
-    const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    ),
-    onDidReceiveNotificationResponse: reminderActionCallback,
-    onDidReceiveBackgroundNotificationResponse: reminderActionCallback,
-  );
+  final fln = await _initReminderPlugin();
+  await fln.show(id, title, '', _reminderDetails());
+}
 
-  const channel = AndroidNotificationChannel(
-    'reminders',
-    'Reminders',
-    description: 'Task reminders and recurring notifications',
-    importance: Importance.high,
-  );
-  await fln
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
+/// Runs daily for a Daily Non-Negotiables section reminder (Intellectual /
+/// Physical / Spiritual). Like [recurringReminderCallback] it keeps firing and
+/// never completes a task, but it's owned by SharedPreferences (keyed by the
+/// notification id) rather than a `recurring` task — so it doesn't clutter the
+/// Tasks screen. The body lists whatever items in that section are still undone,
+/// as a nudge. Silences itself if the section reminder was cancelled.
+@pragma('vm:entry-point')
+void nonNegotiableCallback(int id) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+  final name = prefs.getString('nn_ttl_$id');
+  final schedTime = prefs.getString('nn_tim_$id'); // 'HH:MM'
 
-  await fln.show(
-    id,
-    title,
-    '',
-    const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'reminders',
-        'Reminders',
-        channelDescription: 'Task reminders and recurring notifications',
-        importance: Importance.high,
-        priority: Priority.high,
-        category: AndroidNotificationCategory.reminder,
-        enableVibration: true,
-        autoCancel: true,
-      ),
-    ),
-  );
+  // Cancelled → the pref was removed; stop firing.
+  if (name == null) {
+    await AndroidAlarmManager.cancel(id);
+    return;
+  }
+
+  final now = DateTime.now();
+
+  // Stale-fire guard: a reinstall/reboot re-fires past periodic alarms
+  // immediately at the wrong time of day — only show near the scheduled minute.
+  if (schedTime != null) {
+    final p = schedTime.split(':');
+    final sched = DateTime(now.year, now.month, now.day,
+        int.tryParse(p[0]) ?? 0, int.tryParse(p[1]) ?? 0);
+    final diff = now.difference(sched).inMinutes;
+    if (diff < -1 || diff > 30) return;
+  }
+
+  // Build a nudge body from the section's still-undone items.
+  String body = 'Your $name non-negotiables for today.';
+  try {
+    final db = await DatabaseHelper.instance.database;
+    final lists = await db.query('lists',
+        columns: ['id'],
+        where: 'name = ? AND category = ?',
+        whereArgs: [name, 'nonnegotiable'],
+        limit: 1);
+    if (lists.isNotEmpty) {
+      final items = await db.query('list_items',
+          columns: ['title'],
+          where: 'list_id = ? AND is_done = 0',
+          whereArgs: [lists.first['id']]);
+      if (items.isNotEmpty) {
+        body = items.map((m) => m['title'] as String).join(' · ');
+      } else {
+        body = 'All done — nice work.';
+      }
+    }
+  } catch (_) {}
+
+  final fln = await _initReminderPlugin();
+  await fln.show(id, '$name — non-negotiables', body, _reminderDetails());
 }
 
 class AlarmService {
@@ -316,22 +357,7 @@ class AlarmService {
     required String label,
     required String recurrence,
   }) async {
-    final parts = time.split(':');
-    final hour = int.parse(parts[0]);
-    final minute = int.parse(parts[1]);
-
-    var scheduledTime = DateTime(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-      hour,
-      minute,
-    );
-
-    if (scheduledTime.isBefore(DateTime.now())) {
-      scheduledTime = scheduledTime.add(const Duration(days: 1));
-    }
-
+    final scheduledTime = _nextOccurrenceOf(time);
     final alarmId = generateId();
 
     await _alarmChannel.invokeMethod('schedule', {
@@ -353,6 +379,50 @@ class AlarmService {
     await repo.updateAndroidId(dbId, alarmId);
 
     return alarmId;
+  }
+
+  /// Schedule (or reschedule) the daily reminder for a non-negotiable section.
+  /// Keyed by [slug] so calling it again cancels the previous alarm and arms a
+  /// new one at [time] ('HH:MM'). Persists so the Daily screen can show the time.
+  Future<void> scheduleNonNegotiableReminder({
+    required String slug,
+    required String name,
+    required String time,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Cancel any existing alarm for this section first.
+    final existing = prefs.getInt('nn_notif_$slug');
+    if (existing != null) {
+      await AndroidAlarmManager.cancel(existing);
+      await FlutterLocalNotificationsPlugin().cancel(existing);
+      await prefs.remove('nn_ttl_$existing');
+      await prefs.remove('nn_tim_$existing');
+    }
+
+    final startAt = _nextOccurrenceOf(time);
+    final id = generateId();
+    await prefs.setInt('nn_notif_$slug', id);
+    await prefs.setString('nn_time_$slug', time);
+    await prefs.setString('nn_ttl_$id', name);
+    await prefs.setString('nn_tim_$id', time);
+
+    await AndroidAlarmManager.periodic(
+      const Duration(days: 1),
+      id,
+      nonNegotiableCallback,
+      startAt: startAt,
+      exact: true,
+      wakeup: true,
+      rescheduleOnReboot: true,
+    );
+  }
+
+  /// Read the currently-scheduled time ('HH:MM') for a section, or null.
+  Future<String?> nonNegotiableTime(String slug) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs.getString('nn_time_$slug');
   }
 
   Future<void> cancelAlarm(int androidAlarmId) async {
@@ -439,19 +509,9 @@ class AlarmService {
   }) async {
     final ids = <int>[];
     final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
 
     for (final time in times) {
-      final parts = time.split(':');
-      var startAt = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        int.parse(parts[0]),
-        int.parse(parts[1]),
-      );
-      if (startAt.isBefore(now)) startAt = startAt.add(const Duration(days: 1));
-
+      final startAt = _nextOccurrenceOf(time);
       final id = generateId();
       await prefs.setString('recur_title_$id', title);
       await prefs.setBool('recur_skip_$id', skipWeekends);
@@ -488,12 +548,7 @@ class AlarmService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('reminder_title_$id');
     await prefs.remove('reminder_body_$id');
-    await prefs.remove('recur_title_$id');
-    await prefs.remove('recur_skip_$id');
-    await prefs.remove('recur_end_$id');
-    await prefs.remove('recur_time_$id');
-    await prefs.remove('recur_freq_$id');
-    await prefs.remove('recur_weekday_$id');
+    await _clearRecurPrefs(prefs, id);
   }
 
   /// Re-arm every scheduled item from the current DB + prefs. Used after a
@@ -536,12 +591,7 @@ class AlarmService {
           for (final id in t.notificationIds) {
             final time = prefs.getString('recur_time_$id');
             if (time == null) continue; // notify time unknown — can't re-arm
-            final parts = time.split(':');
-            var startAt = DateTime(now.year, now.month, now.day,
-                int.parse(parts[0]), int.parse(parts[1]));
-            if (startAt.isBefore(now)) {
-              startAt = startAt.add(const Duration(days: 1));
-            }
+            final startAt = _nextOccurrenceOf(time);
             await AndroidAlarmManager.periodic(
               const Duration(days: 1),
               id,
@@ -601,22 +651,7 @@ class AlarmService {
     required String label,
     required String recurrence,
   }) async {
-    final parts = time.split(':');
-    final hour = int.parse(parts[0]);
-    final minute = int.parse(parts[1]);
-
-    var scheduledTime = DateTime(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-      hour,
-      minute,
-    );
-
-    if (scheduledTime.isBefore(DateTime.now())) {
-      scheduledTime = scheduledTime.add(const Duration(days: 1));
-    }
-
+    final scheduledTime = _nextOccurrenceOf(time);
     await _alarmChannel.invokeMethod('schedule', {
       'id': androidAlarmId,
       'triggerAtMillis': scheduledTime.millisecondsSinceEpoch,

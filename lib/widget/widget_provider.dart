@@ -17,27 +17,6 @@ class WidgetProvider {
     }
   }
 
-  /// The DateTime an alarm will next ring: later today if its time is still
-  /// ahead, otherwise tomorrow (weekday alarms skip the weekend). This is why a
-  /// 7am alarm correctly shows as "next" even at 9pm the night before.
-  static DateTime? _nextAlarmFire(AlarmModel a, DateTime now) {
-    try {
-      final p = a.alarmTime.split(':');
-      var dt = DateTime(now.year, now.month, now.day,
-          int.parse(p[0]), int.parse(p[1]));
-      if (!dt.isAfter(now)) dt = dt.add(const Duration(days: 1));
-      if (a.recurrence == 'weekdays') {
-        while (dt.weekday == DateTime.saturday ||
-            dt.weekday == DateTime.sunday) {
-          dt = dt.add(const Duration(days: 1));
-        }
-      }
-      return dt;
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Returns the next upcoming event label — either an alarm time or a
   /// reminder due time — whichever fires soonest.
   static Future<String> _nextEventLabel(dynamic db) async {
@@ -48,8 +27,8 @@ class WidgetProvider {
     AlarmModel? soonestAlarm;
     final alarms = await AlarmRepository(db).getActiveAlarms();
     for (final a in alarms) {
-      final dt = _nextAlarmFire(a, now);
-      if (dt != null && (alarmDt == null || dt.isBefore(alarmDt))) {
+      final dt = a.nextFire(now);
+      if (alarmDt == null || dt.isBefore(alarmDt)) {
         alarmDt = dt;
         soonestAlarm = a;
       }

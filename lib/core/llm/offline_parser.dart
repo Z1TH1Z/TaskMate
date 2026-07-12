@@ -21,6 +21,9 @@ class OfflineParser {
     final alarm = _alarm(text, msg);
     if (alarm != null) return [alarm];
 
+    final nn = _nonNegotiable(text, msg);
+    if (nn != null) return [nn];
+
     final list = _listAdd(text, msg);
     if (list != null) return [list];
 
@@ -84,6 +87,48 @@ class OfflineParser {
       'label': 'Alarm',
       'recurrence': recurrence,
     };
+  }
+
+  /// "add/remove ITEMS to/from my [intellectual|physical|spiritual]
+  /// non-negotiables". Needs an explicit "non-negotiable" mention AND a section
+  /// word to route confidently — otherwise defer (return null).
+  static Map<String, dynamic>? _nonNegotiable(String text, String msg) {
+    if (!RegExp(r'non[-\s]?negotiab', caseSensitive: false).hasMatch(msg)) {
+      return null;
+    }
+    final section = _canonSection(msg);
+    if (section == null) return null;
+
+    final isRemove = RegExp(r'\b(remove|delete|drop)\b').hasMatch(msg);
+    final m = RegExp(r'\b(?:add|remove|delete|drop)\s+(.+?)\s+(?:to|from)\b',
+            caseSensitive: false)
+        .firstMatch(text);
+    if (m == null) return null;
+
+    final items = m
+        .group(1)!
+        .trim()
+        .split(RegExp(r'\s*,\s*|\s+and\s+', caseSensitive: false))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .map((s) => {'title': s, 'notes': null})
+        .toList();
+    if (items.isEmpty) return null;
+
+    return {
+      'type': 'list',
+      'action': isRemove ? 'remove' : 'add',
+      'list_name': section,
+      'category': 'nonnegotiable',
+      'items': items,
+    };
+  }
+
+  static String? _canonSection(String msg) {
+    if (RegExp(r'intellect|mind|mental').hasMatch(msg)) return 'Intellectual';
+    if (RegExp(r'physical|body|fitness').hasMatch(msg)) return 'Physical';
+    if (RegExp(r'spiritual|soul|faith').hasMatch(msg)) return 'Spiritual';
+    return null;
   }
 
   static Map<String, dynamic>? _listAdd(String text, String msg) {

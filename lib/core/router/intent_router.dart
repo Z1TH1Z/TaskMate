@@ -144,7 +144,66 @@ class IntentRouter {
     return '✓ Recurring set — ${intent.title}\n$timesStr · ${intent.recurrence}$endStr';
   }
 
+  /// Map a free-text section reference to one of the three fixed
+  /// Daily Non-Negotiables sections, or null if it matches none.
+  String? _canonNonNegotiable(String raw) {
+    final s = raw.toLowerCase();
+    if (s.contains('intellect') || s.contains('mind') || s.contains('mental')) {
+      return 'Intellectual';
+    }
+    if (s.contains('physical') || s.contains('body') || s.contains('fitness')) {
+      return 'Physical';
+    }
+    if (s.contains('spiritual') || s.contains('soul') || s.contains('faith')) {
+      return 'Spiritual';
+    }
+    return null;
+  }
+
+  /// Add/remove items in a Daily Non-Negotiables section from chat. Driven by the
+  /// LLM emitting a LIST intent with category "nonnegotiable"; never creates a
+  /// new list, only routes to one of the three fixed sections.
+  Future<String> _handleNonNegotiableList(ListIntent intent) async {
+    await _listRepo.ensureNonNegotiableSections();
+    final canon = _canonNonNegotiable(intent.listName) ??
+        _canonNonNegotiable(intent.category);
+    if (canon == null) {
+      return "Which non-negotiable — Intellectual, Physical, or Spiritual?";
+    }
+    final section = await _listRepo.getNonNegotiableByName(canon);
+    if (section == null) return "Couldn't find your $canon non-negotiables.";
+
+    if (intent.action == 'remove') {
+      final removed = <String>[];
+      for (final item in intent.items) {
+        final count =
+            await _listRepo.deleteItemsByTitle(section.id!, item.title);
+        if (count > 0) removed.add(item.title);
+      }
+      if (removed.isEmpty) {
+        return "Couldn't find those in your $canon non-negotiables.";
+      }
+      return '✓ Removed from $canon non-negotiables\n${removed.join(' · ')}';
+    }
+
+    final added = <String>[];
+    for (final item in intent.items) {
+      await _listRepo.insertItem(ListItem(
+        listId: section.id!,
+        title: item.title,
+        notes: item.notes,
+      ));
+      added.add(item.title);
+    }
+    if (added.isEmpty) return "Nothing to add.";
+    return '✓ Added to $canon non-negotiables\n${added.join(' · ')}';
+  }
+
   Future<String> _handleList(ListIntent intent) async {
+    if (intent.category == ListRepository.nonNegotiableCategory) {
+      return _handleNonNegotiableList(intent);
+    }
+
     TaskList? existingList = await _listRepo.getListByName(intent.listName);
 
     // Fallback: match by category if exact name not found
@@ -285,6 +344,32 @@ class IntentRouter {
     // List query — show items from a named list.
     if (intent.filter == 'list') {
       final searchTerm = intent.listName ?? '';
+
+      // Daily Non-Negotiables are hidden from normal list queries — surface them
+      // only when the user explicitly asks for "non-negotiables" or a section.
+      final wantsNN = searchTerm.toLowerCase().contains('negotiab');
+      final canonNN = _canonNonNegotiable(searchTerm);
+      if (wantsNN || canonNN != null) {
+        final sections = await _listRepo.ensureNonNegotiableSections();
+        final show = canonNN != null
+            ? sections.where((s) => s.name == canonNN)
+            : sections;
+        final buffer = StringBuffer();
+        for (final s in show) {
+          final items = await _listRepo.getItems(s.id!);
+          final pending = items.where((i) => !i.isDone).toList();
+          buffer.writeln('🔥 ${s.name} non-negotiables:');
+          if (pending.isEmpty) {
+            buffer.writeln('  (empty)');
+          } else {
+            for (final item in pending) {
+              buffer.writeln('  • ${item.title}');
+            }
+          }
+        }
+        return buffer.toString().trimRight();
+      }
+
       final lists = searchTerm.isEmpty
           ? await _listRepo.getLists()
           : await _listRepo.searchLists(searchTerm);

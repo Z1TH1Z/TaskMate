@@ -54,18 +54,4 @@ class Task {
     createdAt: map['created_at'] as String,
     priority: map['priority'] as String?,
   );
-
-  Task copyWith({List<int>? notificationIds, bool? isCompleted}) => Task(
-    id: id,
-    title: title,
-    type: type,
-    dueDate: dueDate,
-    recurrence: recurrence,
-    recurrenceEnd: recurrenceEnd,
-    skipWeekends: skipWeekends,
-    isCompleted: isCompleted ?? this.isCompleted,
-    notificationIds: notificationIds ?? this.notificationIds,
-    createdAt: createdAt,
-    priority: priority,
-  );
 }

@@ -18,32 +18,6 @@ class AlarmRepository {
     return maps.map(AlarmModel.fromMap).toList();
   }
 
-  Future<AlarmModel?> getNextAlarm() async {
-    final now = DateTime.now();
-    final currentTime =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
-    // Prefer the next one-shot or recurring alarm still ahead today.
-    final todayMaps = await _db.query(
-      'alarms',
-      where: 'is_active = 1 AND alarm_time > ?',
-      whereArgs: [currentTime],
-      orderBy: 'alarm_time ASC',
-      limit: 1,
-    );
-    if (todayMaps.isNotEmpty) return AlarmModel.fromMap(todayMaps.first);
-
-    // Fall back to the earliest recurring alarm (it fires again tomorrow).
-    final tomorrowMaps = await _db.query(
-      'alarms',
-      where: "is_active = 1 AND recurrence != 'none'",
-      orderBy: 'alarm_time ASC',
-      limit: 1,
-    );
-    if (tomorrowMaps.isEmpty) return null;
-    return AlarmModel.fromMap(tomorrowMaps.first);
-  }
-
   Future<void> deactivate(int androidAlarmId) async {
     await _db.update(
       'alarms',
@@ -99,9 +73,5 @@ class AlarmRepository {
       limit: 1,
     );
     return maps.isNotEmpty;
-  }
-
-  Future<void> delete(int id) async {
-    await _db.delete('alarms', where: 'id = ?', whereArgs: [id]);
   }
 }

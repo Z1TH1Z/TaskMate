@@ -84,15 +84,6 @@ class TaskRepository {
     );
   }
 
-  Future<void> clearTodayNotifications(int id) async {
-    await _db.update(
-      'tasks',
-      {'notification_ids': '[]'},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
   Future<List<Task>> getByType(String type) async {
     final maps = await _db.query(
       'tasks',
@@ -122,9 +113,5 @@ class TaskRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
-  }
-
-  Future<void> delete(int id) async {
-    await _db.delete('tasks', where: 'id = ?', whereArgs: [id]);
   }
 }

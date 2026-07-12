@@ -347,7 +347,7 @@ class _ChatScreenState extends State<ChatScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         itemCount: chips.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) => GestureDetector(
           onTap: () {
             HapticFeedback.lightImpact();
@@ -502,7 +502,7 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
     final accent = Theme.of(context).colorScheme.primary;
     return AnimatedBuilder(
       animation: _anim,
-      builder: (_, __) => Opacity(
+      builder: (_, _) => Opacity(
         opacity: 0.3 + _anim.value * 0.7,
         child: Container(
           width: 5, height: 5,

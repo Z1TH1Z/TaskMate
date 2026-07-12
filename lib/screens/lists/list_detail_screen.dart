@@ -196,7 +196,7 @@ class _ListDetailScreenState extends State<ListDetailScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
       itemCount: _items.length,
-      separatorBuilder: (_, __) =>
+      separatorBuilder: (_, _) =>
           const Divider(color: AppColors.divider, height: 1),
       itemBuilder: (ctx, i) => _itemRow(_items[i]),
     );

@@ -4,6 +4,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/db/database.dart';
 import 'core/db/repositories/task_repository.dart';
+import 'core/db/repositories/list_repository.dart';
 import 'core/scheduler/notification_service.dart';
 import 'core/scheduler/alarm_service.dart';
 import 'widget/widget_provider.dart';
@@ -65,6 +66,21 @@ Future<void> main() async {
   // Clean up any one-time reminders that fired but weren't marked complete
   // (e.g. background isolate was killed by the OS before DB write finished).
   await AlarmService().cleanupStaleReminders();
+
+  // First launch: create the Daily Non-Negotiables sections and arm each one's
+  // default daily reminder, so they fire even before the user opens the tab.
+  // (Recurring reminders persist across reboot via android_alarm_manager_plus's
+  // own rescheduleOnReboot store, so this only needs to run once.)
+  if (!(prefs.getBool('nn_initialized') ?? false)) {
+    final db = await DatabaseHelper.instance.database;
+    await ListRepository(db).ensureNonNegotiableSections();
+    for (final (slug, name, defaultTime)
+        in ListRepository.nonNegotiableSections) {
+      await AlarmService().scheduleNonNegotiableReminder(
+          slug: slug, name: name, time: defaultTime);
+    }
+    await prefs.setBool('nn_initialized', true);
+  }
 
   await WidgetProvider.refresh();
 

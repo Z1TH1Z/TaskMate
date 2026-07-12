@@ -28,16 +28,5 @@ class DateHelper {
     }
   }
 
-  static bool isToday(String? dateStr) {
-    if (dateStr == null) return false;
-    final today = DateTime.now();
-    final todayStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    return dateStr.startsWith(todayStr);
-  }
-
   static String nowIso() => DateTime.now().toIso8601String();
-
-  static String nowDisplay() =>
-      DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 }

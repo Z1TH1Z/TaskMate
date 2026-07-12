@@ -12,7 +12,9 @@ import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -30,6 +32,8 @@ class AlarmForegroundService : Service() {
         const val ACTION_STOP = "com.taskmate.ALARM_STOP"
         const val ACTION_SNOOZE = "com.taskmate.ALARM_SNOOZE"
         const val SNOOZE_MINUTES = 10
+        // Give up ringing after this long so a missed alarm can never ring forever.
+        const val AUTO_STOP_MINUTES = 5
         private const val CHANNEL_ID = "taskmate_alarm_fullscreen"
         private const val NOTIF_ID = 424242
     }
@@ -39,11 +43,18 @@ class AlarmForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var currentId: Int = 0
     private var currentLabel: String = "Alarm"
+    private var ringing = false
+    private val timeoutHandler = Handler(Looper.getMainLooper())
+    private val autoStop = Runnable { stopAlarm() }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        // START_NOT_STICKY means we should never be restarted with a null intent,
+        // but guard anyway: a null/unknown restart must not resurrect a ghost alarm.
+        if (intent == null) { stopAlarm(); return START_NOT_STICKY }
+
+        when (intent.action) {
             ACTION_STOP -> { stopAlarm(); return START_NOT_STICKY }
             ACTION_SNOOZE -> {
                 val id = intent.getIntExtra(AlarmScheduler.EXTRA_ID, currentId)
@@ -53,15 +64,26 @@ class AlarmForegroundService : Service() {
             }
         }
 
-        currentId = intent?.getIntExtra(AlarmScheduler.EXTRA_ID, 0) ?: 0
-        currentLabel = intent?.getStringExtra(AlarmScheduler.EXTRA_LABEL) ?: "Alarm"
+        currentId = intent.getIntExtra(AlarmScheduler.EXTRA_ID, 0)
+        currentLabel = intent.getStringExtra(AlarmScheduler.EXTRA_LABEL) ?: "Alarm"
 
         startForeground(NOTIF_ID, buildNotification(currentLabel))
+
+        // Already ringing (a second fire hit the same service instance): just refresh
+        // the notification/UI — do NOT start a second MediaPlayer/vibration, or the
+        // first one leaks with no reference and can never be stopped.
+        if (ringing) {
+            launchAlarmActivity(currentId, currentLabel)
+            return START_NOT_STICKY
+        }
+        ringing = true
+
         acquireWakeLock()
         startSound()
         startVibration()
         launchAlarmActivity(currentId, currentLabel)
-        return START_STICKY
+        timeoutHandler.postDelayed(autoStop, AUTO_STOP_MINUTES * 60_000L)
+        return START_NOT_STICKY
     }
 
     private fun buildNotification(label: String): Notification {
@@ -119,6 +141,9 @@ class AlarmForegroundService : Service() {
     }
 
     private fun startSound() {
+        // Never leave an old player behind — a leaked looping MediaPlayer can't be stopped.
+        try { player?.stop(); player?.release() } catch (_: Exception) {}
+        player = null
         val uriStr = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             .getString("flutter.alarm_sound_uri", null)
         val soundUri: Uri = if (!uriStr.isNullOrEmpty()) {
@@ -191,9 +216,12 @@ class AlarmForegroundService : Service() {
     }
 
     private fun stopAlarm() {
+        ringing = false
+        timeoutHandler.removeCallbacks(autoStop)
         try { player?.stop(); player?.release() } catch (_: Exception) {}
         player = null
         vibrator?.cancel()
+        vibrator = null
         try { if (wakeLock?.isHeld == true) wakeLock?.release() } catch (_: Exception) {}
         wakeLock = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -202,6 +230,7 @@ class AlarmForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        timeoutHandler.removeCallbacks(autoStop)
         try { player?.release() } catch (_: Exception) {}
         vibrator?.cancel()
         try { if (wakeLock?.isHeld == true) wakeLock?.release() } catch (_: Exception) {}

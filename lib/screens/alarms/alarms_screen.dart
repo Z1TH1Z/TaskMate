@@ -37,22 +37,9 @@ class _AlarmsScreenState extends State<AlarmsScreen> {
     await AlarmService().reconcileFiredAlarms();
     final db = await DatabaseHelper.instance.database;
     final alarms = await AlarmRepository(db).getActiveAlarms();
-    alarms.sort((a, b) => _nextFire(a).compareTo(_nextFire(b)));
-    if (mounted) setState(() { _alarms = alarms; _loading = false; });
-  }
-
-  DateTime _nextFire(AlarmModel a) {
     final now = DateTime.now();
-    final p = a.alarmTime.split(':');
-    var dt = DateTime(now.year, now.month, now.day,
-        int.tryParse(p[0]) ?? 0, int.tryParse(p[1]) ?? 0);
-    if (!dt.isAfter(now)) dt = dt.add(const Duration(days: 1));
-    if (a.recurrence == 'weekdays') {
-      while (dt.weekday == DateTime.saturday || dt.weekday == DateTime.sunday) {
-        dt = dt.add(const Duration(days: 1));
-      }
-    }
-    return dt;
+    alarms.sort((a, b) => a.nextFire(now).compareTo(b.nextFire(now)));
+    if (mounted) setState(() { _alarms = alarms; _loading = false; });
   }
 
   String _whenLabel(DateTime dt) {
@@ -210,7 +197,7 @@ class _AlarmsScreenState extends State<AlarmsScreen> {
   }
 
   Widget _alarmCard(AlarmModel a) {
-    final next = _nextFire(a);
+    final next = a.nextFire(DateTime.now());
     final accent = Theme.of(context).colorScheme.primary;
     return Dismissible(
       key: Key('alarm_${a.id ?? a.androidAlarmId}'),

@@ -40,6 +40,19 @@ adding items. The app auto-creates the list if needed. Use the CATEGORY as list_
 (e.g. list_name:"Shows", list_name:"Movies", list_name:"Books"), not generic names
 like "Watchlist", "Watch List", or "My List".
 
+DAILY NON-NEGOTIABLES — three FIXED sections: Intellectual, Physical, Spiritual.
+When the user adds/removes something to/from their "non-negotiables" (or a
+"[intellectual|physical|spiritual] non-negotiable / habit / daily"), emit a LIST
+intent with category "nonnegotiable" and list_name set to the section name:
+{"type":"list","action":"add","list_name":"Physical","category":"nonnegotiable",
+ "items":[{"title":"20 pushups","notes":null}]}
+"remove meditation from my spiritual non-negotiables" → action "remove",
+list_name "Spiritual", category "nonnegotiable".
+Map the words: mind/mental/learning/reading → Intellectual; body/fitness/exercise/
+gym → Physical; soul/prayer/faith/meditation → Spiritual.
+To view them: {"type":"query","filter":"list","list_name":"non-negotiables"} (all
+three) or list_name a single section (e.g. "Intellectual").
+
 TODO — simple one-off task.
 {"type":"todo","title":"Submit report","due_date":"2026-06-20","priority":"high"}
 priority: "high"|"medium"|"low" (infer). due_date: "YYYY-MM-DD" or null.

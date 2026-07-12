@@ -11,6 +11,7 @@ import 'screens/chat/chat_screen.dart';
 import 'screens/tasks/tasks_screen.dart';
 import 'screens/alarms/alarms_screen.dart';
 import 'screens/lists/lists_screen.dart';
+import 'screens/nonnegotiables/non_negotiables_screen.dart';
 
 class TaskMateApp extends StatelessWidget {
   const TaskMateApp({super.key});
@@ -136,6 +137,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     TasksScreen(isVisible: _currentIndex == 1),
     AlarmsScreen(isVisible: _currentIndex == 2),
     ListsScreen(isVisible: _currentIndex == 3),
+    NonNegotiablesScreen(isVisible: _currentIndex == 4),
   ];
 
   static const _tabs = [
@@ -143,6 +145,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     (Icons.check_box_outline_blank, 'TASKS'),
     (Icons.alarm, 'ALARMS'),
     (Icons.list, 'LISTS'),
+    (Icons.bolt_outlined, 'DAILY'),
   ];
 
   void _onTabTap(int i) {
